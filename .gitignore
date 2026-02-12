@@ -253,3 +253,7 @@ deploy_server.sh
 
 # Системные файлы
 *.sock
+
+# Test database
+taskparser_test
+.env.test

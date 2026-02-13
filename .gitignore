@@ -257,3 +257,37 @@ deploy_server.sh
 # Test database
 taskparser_test
 .env.test
+
+# Базы данных и дампы
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+*.dump
+*.backup
+*.pgdump
+*.sql.gz
+
+# Данные PostgreSQL
+postgres_data/
+pgdata/
+data/postgres/
+
+# Дампы для деплоя
+taskparser.dump
+*.tar.gz
+!*.tar.gz  # если нужно исключить только определённые
+
+# Docker образы
+*.tar
+*.tar.gz
+*.tgz
+docker-images/
+images/
+
+# Дампы БД и архивы
+*.dump
+*.sql.tar.gz
+*.sql.gz
+backup/
+backups/

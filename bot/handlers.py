@@ -93,7 +93,8 @@ class CodeforcesBotHandlers:
             "3. Выберите 'Поиск по тегам' для фильтра по темам\n\n"
             "Доступные теги:\n"
             "Математика, графы, динамика, жадные алгоритмы, строки, геометрия и другие\n\n"
-            "По всем вопросам: @GalaxyVoyager"
+            "Бот создан в образовательных целях\n"
+            "Автор бота: @GalaxyVoyager"
         )
 
         await update.message.reply_text(
@@ -194,17 +195,6 @@ class CodeforcesBotHandlers:
 
         elif text == "Статистика":
             await self.stats_command(update, context)
-
-        elif text == "Настройки":
-            await update.message.reply_text(
-                "Настройки\n\n"
-                "Функция в разработке. Скоро здесь появятся:\n"
-                "- Установка предпочтительной сложности\n"
-                "- Сохранение любимых тегов\n"
-                "- Настройка количества результатов\n\n"
-                "Следите за обновлениями!",
-                reply_markup=get_simple_keyboard()
-            )
 
         elif text == "Помощь":
             await self.help_command(update, context)

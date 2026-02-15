@@ -47,7 +47,6 @@ INSTALLED_APPS = [
     # Local apps
     'parser',
     'bot',
-    'api',
 ]
 
 MIDDLEWARE = [

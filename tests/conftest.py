@@ -1,49 +1,13 @@
-"""
-Shared pytest fixtures.
-"""
-
 import pytest
-import os
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
+from django.core.management import call_command
+from parser.models import Tag
 
-from parser.models import Base
-
-# Load environment variables
-load_dotenv()
-
+@pytest.fixture(autouse=True)
+def clear_tags():
+    """Clear tags before each test."""
+    Tag.objects.all().delete()
 
 @pytest.fixture(scope='session')
-def engine():
-    """Create PostgreSQL engine for testing."""
-    database_url = os.environ.get(
-        'TEST_DATABASE_URL',
-        'postgresql://taskparser:1357@localhost:5432/taskparser_test'
-    )
-
-    engine = create_engine(database_url)
-
-    # Create tables
-    Base.metadata.drop_all(engine)  # Clean start
-    Base.metadata.create_all(engine)
-
-    yield engine
-
-    # Cleanup
-    Base.metadata.drop_all(engine)
-    engine.dispose()
-
-
-@pytest.fixture
-def db_session(engine):
-    """Create a new database session for a test."""
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = sessionmaker(bind=connection)()
-
-    yield session
-
-    session.close()
-    transaction.rollback()
-    connection.close()
+def django_db_setup(django_db_setup, django_db_blocker):
+    with django_db_blocker.unblock():
+        call_command('migrate')

@@ -43,7 +43,7 @@ class CodeforcesBotHandlers:
         user = update.effective_user
 
         # Save user to database
-        db_user = self.db.get_or_create_user(
+        db_user = await self.db.get_or_create_user(
             telegram_id=user.id,
             username=user.username,
             first_name=user.first_name,
@@ -109,7 +109,7 @@ class CodeforcesBotHandlers:
         """
         user = update.effective_user
 
-        stats = self.db.get_user_statistics(user.id)
+        stats = await self.db.get_user_statistics(user.id)
 
         if not stats:
             await update.message.reply_text(
@@ -148,7 +148,7 @@ class CodeforcesBotHandlers:
 
         if user_id not in user_sessions:
             # Initialize session if not exists
-            db_user = self.db.get_or_create_user(
+            db_user = await self.db.get_or_create_user(
                 telegram_id=user_id,
                 username=update.effective_user.username,
                 first_name=update.effective_user.first_name,
@@ -176,7 +176,7 @@ class CodeforcesBotHandlers:
 
         elif text == "Поиск по тегам":
             # Get all tags from database
-            tags = self.db.get_all_tags()
+            tags = await self.db.get_all_tags()
             user_sessions[user_id]['selected_tags'] = []
 
             if not tags:
@@ -217,7 +217,7 @@ class CodeforcesBotHandlers:
         user_id = update.effective_user.id
 
         # Search tasks
-        tasks = self.db.search_tasks_by_query(query, limit=10)
+        tasks = await self.db.search_tasks_by_query(query, limit=10)
 
         if not tasks:
             await update.message.reply_text(
@@ -228,7 +228,7 @@ class CodeforcesBotHandlers:
 
         # Save search history
         if user_id in user_sessions:
-            self.db.save_search_history(
+            await self.db.save_search_history(
                 user_id=user_sessions[user_id]['user_id'],
                 query=query,
                 results_count=len(tasks)
@@ -244,7 +244,7 @@ class CodeforcesBotHandlers:
         text = f"{header}\n\n"
 
         for i, task in enumerate(tasks[:10], 1):
-            tags_str = ', '.join(task.tags[:3]) if task.tags else 'нет'
+            tags_str = ', '.join(task.tags_list[:3]) if task.tags_list else 'нет'
             text += (
                 f"{i}. {task.contest_id}{task.index}: {task.name}\n"
                 f"   Сложность: {task.rating or 'N/A'}\n"
@@ -289,7 +289,7 @@ class CodeforcesBotHandlers:
         elif data.startswith("tag_page_"):
             # Handle tag page navigation
             page = int(data.split('_')[2])
-            tags = self.db.get_all_tags()
+            tags = await self.db.get_all_tags()
             keyboard, _ = get_tag_keyboard(tags, page)
             await query.edit_message_reply_markup(reply_markup=keyboard)
 
@@ -301,7 +301,7 @@ class CodeforcesBotHandlers:
                     user_sessions[user_id]['selected_tags'].append(tag)
 
                     # Show selected tags
-                    tags = self.db.get_all_tags()
+                    tags = await self.db.get_all_tags()
                     keyboard = get_selected_tags_keyboard(
                         user_sessions[user_id]['selected_tags'],
                         tags
@@ -331,7 +331,7 @@ class CodeforcesBotHandlers:
                 user_sessions[user_id]['selected_tags'].remove(tag)
 
                 if user_sessions[user_id]['selected_tags']:
-                    tags = self.db.get_all_tags()
+                    tags = await self.db.get_all_tags()
                     keyboard = get_selected_tags_keyboard(
                         user_sessions[user_id]['selected_tags'],
                         tags
@@ -342,7 +342,7 @@ class CodeforcesBotHandlers:
                     )
                 else:
                     # No tags selected, go back to tag selection
-                    tags = self.db.get_all_tags()
+                    tags = await self.db.get_all_tags()
                     keyboard, _ = get_tag_keyboard(tags, 0)
                     await query.edit_message_text(
                         "Выберите теги:",
@@ -350,7 +350,7 @@ class CodeforcesBotHandlers:
                     )
 
         elif data == "add_more_tags":
-            tags = self.db.get_all_tags()
+            tags = await self.db.get_all_tags()
             keyboard, _ = get_tag_keyboard(tags, 0)
             await query.edit_message_text(
                 "Выберите дополнительные теги:",
@@ -360,7 +360,7 @@ class CodeforcesBotHandlers:
         elif data == "clear_tags":
             if user_id in user_sessions:
                 user_sessions[user_id]['selected_tags'] = []
-            tags = self.db.get_all_tags()
+            tags = await self.db.get_all_tags()
             keyboard, _ = get_tag_keyboard(tags, 0)
             await query.edit_message_text(
                 "Теги очищены. Выберите новые теги:",
@@ -369,7 +369,7 @@ class CodeforcesBotHandlers:
 
         elif data == "confirm_yes":
             # User confirmed to continue without tags
-            tags = self.db.get_all_tags()
+            tags = await self.db.get_all_tags()
             keyboard, _ = get_tag_keyboard(tags, 0)
             await query.edit_message_text(
                 "Выберите теги для поиска:",
@@ -392,7 +392,7 @@ class CodeforcesBotHandlers:
         user_id = update.effective_user.id
 
         # Get tasks by rating
-        tasks = self.db.get_tasks_by_rating_range(min_rating, max_rating, limit=10)
+        tasks = await self.db.get_tasks_by_filters(min_rating, max_rating, limit=10)
 
         if not tasks:
             await query.edit_message_text(
@@ -403,7 +403,7 @@ class CodeforcesBotHandlers:
 
         # Save search history
         if user_id in user_sessions:
-            self.db.save_search_history(
+            await self.db.save_search_history(
                 user_id=user_sessions[user_id]['user_id'],
                 min_rating=min_rating,
                 max_rating=max_rating,
@@ -414,7 +414,7 @@ class CodeforcesBotHandlers:
         text = f"Задачи с рейтингом {min_rating}-{max_rating}\n\n"
 
         for i, task in enumerate(tasks[:10], 1):
-            tags_str = ', '.join(task.tags[:3]) if task.tags else 'нет'
+            tags_str = ', '.join(task.tags_list[:3]) if task.tags_list else 'нет'
             text += (
                 f"{i}. {task.contest_id}{task.index}: {task.name}\n"
                 f"   Сложность: {task.rating}\n"
@@ -445,7 +445,7 @@ class CodeforcesBotHandlers:
         selected_tags = user_sessions[user_id]['selected_tags']
 
         # Get tasks with selected tags
-        tasks = self.db.get_tasks_by_filters(
+        tasks = await self.db.get_tasks_by_filters(
             tags=selected_tags,
             limit=10
         )
@@ -459,7 +459,7 @@ class CodeforcesBotHandlers:
             return
 
         # Save search history
-        self.db.save_search_history(
+        await self.db.save_search_history(
             user_id=user_sessions[user_id]['user_id'],
             tags=selected_tags,
             results_count=len(tasks)
@@ -469,7 +469,7 @@ class CodeforcesBotHandlers:
         text = f"Задачи с тегами: {', '.join(selected_tags)}\n\n"
 
         for i, task in enumerate(tasks[:10], 1):
-            tags_str = ', '.join(task.tags[:3]) if task.tags else 'нет'
+            tags_str = ', '.join(task.tags_list[:3]) if task.tags_list else 'нет'
             text += (
                 f"{i}. {task.contest_id}{task.index}: {task.name}\n"
                 f"   Сложность: {task.rating or 'N/A'}\n"

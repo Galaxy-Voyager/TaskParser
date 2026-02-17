@@ -1,181 +1,122 @@
-"""
-SQLAlchemy models for Codeforces tasks parser.
-These models are independent from Django ORM.
-"""
-
-from datetime import datetime
-from sqlalchemy import (
-    create_engine, Column, Integer, String, Text,
-    DateTime, Table, ForeignKey, Index, Float, Boolean
-)
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
-from sqlalchemy.dialects.postgresql import ARRAY
-
-Base = declarative_base()
-
-# Association table for many-to-many relationship between tasks and tags
-task_tags = Table(
-    'task_tags',
-    Base.metadata,
-    Column('task_id', Integer, ForeignKey('tasks.id', ondelete='CASCADE'), primary_key=True),
-    Column('tag_id', Integer, ForeignKey('tags.id', ondelete='CASCADE'), primary_key=True),
-    Index('idx_task_tags_task_id', 'task_id'),
-    Index('idx_task_tags_tag_id', 'tag_id')
-)
+from django.db import models
 
 
-class Contest(Base):
-    """Model for Codeforces contests."""
+class Contest(models.Model):
+    contest_id = models.IntegerField(unique=True, db_index=True)
+    name = models.CharField(max_length=255)
+    type = models.CharField(max_length=50, blank=True, null=True)
+    phase = models.CharField(max_length=50, blank=True, null=True)
+    frozen = models.BooleanField(default=False)
+    duration_seconds = models.IntegerField(blank=True, null=True)
+    start_time_seconds = models.IntegerField(blank=True, null=True)
+    relative_time_seconds = models.IntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    __tablename__ = 'contests'
+    class Meta:
+        ordering = ['-start_time_seconds']
 
-    id = Column(Integer, primary_key=True)
-    contest_id = Column(Integer, unique=True, nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    type = Column(String(50))
-    phase = Column(String(50))
-    frozen = Column(Boolean, default=False)
-    duration_seconds = Column(Integer)
-    start_time_seconds = Column(Integer)
-    relative_time_seconds = Column(Integer)
-
-    # Relationships
-    tasks = relationship('Task', back_populates='contest', cascade='all, delete-orphan')
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    def __repr__(self):
-        return f"<Contest contest_id={self.contest_id} name={self.name}>"
+    def __str__(self):
+        return f"{self.contest_id}: {self.name}"
 
 
-class Task(Base):
-    """Model for Codeforces tasks/problems."""
+class Tag(models.Model):
+    name = models.CharField(max_length=100, unique=True, db_index=True)
+    slug = models.SlugField(max_length=100, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
-    __tablename__ = 'tasks'
+    class Meta:
+        ordering = ['name']
 
-    id = Column(Integer, primary_key=True)
-    contest_id = Column(Integer, ForeignKey('contests.contest_id'), nullable=False, index=True)
-    index = Column(String(10), nullable=False)
-    name = Column(String(255), nullable=False)
-    rating = Column(Integer, index=True)  # Difficulty rating (800, 900, ...)
-    solved_count = Column(Integer, default=0, index=True)
+    def __str__(self):
+        return self.name
 
-    # Raw tags array from API
-    tags = Column(ARRAY(String), default=[])
 
-    # Time limits and memory limits
-    time_limit = Column(Integer)
-    memory_limit = Column(Integer)
+class Task(models.Model):
+    contest = models.ForeignKey(Contest, on_delete=models.CASCADE, related_name='tasks')
+    index = models.CharField(max_length=10)
+    name = models.CharField(max_length=255)
+    rating = models.IntegerField(blank=True, null=True, db_index=True)
+    solved_count = models.IntegerField(default=0, db_index=True)
+    tags = models.ManyToManyField(Tag, related_name='tasks', blank=True)
+    tags_list = models.JSONField(default=list)  # для быстрого доступа без join
+    time_limit = models.IntegerField(blank=True, null=True)
+    memory_limit = models.IntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    # Relationships
-    contest = relationship('Contest', back_populates='tasks')
-    tag_objects = relationship('Tag', secondary=task_tags, back_populates='tasks')
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    class Meta:
+        unique_together = ['contest', 'index']
+        ordering = ['-solved_count']
+        indexes = [
+            models.Index(fields=['rating', 'solved_count']),
+        ]
 
-    __table_args__ = (
-        Index('idx_contest_index', 'contest_id', 'index', unique=True),
-        Index('idx_rating_solved', 'rating', 'solved_count'),
-    )
+    def __str__(self):
+        return f"{self.contest.contest_id}{self.index}: {self.name}"
 
     @property
     def codeforces_url(self):
-        """Generate Codeforces problem URL."""
-        return f"https://codeforces.com/problemset/problem/{self.contest_id}/{self.index}"
-
-    def __repr__(self):
-        return f"<Task contest_id={self.contest_id} index={self.index} rating={self.rating}>"
+        return f"https://codeforces.com/problemset/problem/{self.contest.contest_id}/{self.index}"
 
 
-class Tag(Base):
-    """Model for problem tags/categories."""
+class ParseHistory(models.Model):
+    STATUS_CHOICES = [
+        ('started', 'Started'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+    ]
+    
+    start_time = models.DateTimeField(auto_now_add=True)
+    end_time = models.DateTimeField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='started')
+    tasks_added = models.IntegerField(default=0)
+    tasks_updated = models.IntegerField(default=0)
+    contests_added = models.IntegerField(default=0)
+    tags_added = models.IntegerField(default=0)
+    error_message = models.TextField(blank=True, null=True)
 
-    __tablename__ = 'tags'
+    class Meta:
+        ordering = ['-start_time']
+        verbose_name_plural = "Parse histories"
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), unique=True, nullable=False, index=True)
-    slug = Column(String(100), unique=True, nullable=False)
-
-    # Relationships
-    tasks = relationship('Task', secondary=task_tags, back_populates='tag_objects')
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    def __repr__(self):
-        return f"<Tag name={self.name}>"
-
-
-class ParseHistory(Base):
-    """Model for tracking parsing operations."""
-
-    __tablename__ = 'parse_history'
-
-    id = Column(Integer, primary_key=True)
-    start_time = Column(DateTime, default=datetime.utcnow, index=True)
-    end_time = Column(DateTime, nullable=True)
-    status = Column(String(50), default='started')
-    tasks_added = Column(Integer, default=0)
-    tasks_updated = Column(Integer, default=0)
-    contests_added = Column(Integer, default=0)
-    tags_added = Column(Integer, default=0)
-    error_message = Column(Text, nullable=True)
-
-    def __repr__(self):
-        return f"<ParseHistory id={self.id} status={self.status}>"
+    def __str__(self):
+        return f"Parse {self.id}: {self.status} at {self.start_time}"
 
 
-class UserSettings(Base):
-    """Model for user settings in Telegram bot."""
+class UserSettings(models.Model):
+    telegram_id = models.BigIntegerField(unique=True, db_index=True)
+    username = models.CharField(max_length=100, blank=True, null=True)
+    first_name = models.CharField(max_length=100, blank=True, null=True)
+    last_name = models.CharField(max_length=100, blank=True, null=True)
+    default_min_rating = models.IntegerField(default=800)
+    default_max_rating = models.IntegerField(default=3500)
+    preferred_tags = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    __tablename__ = 'user_settings'
+    class Meta:
+        verbose_name = "User Settings"
+        verbose_name_plural = "User Settings"
 
-    id = Column(Integer, primary_key=True)
-    telegram_id = Column(Integer, unique=True, nullable=False, index=True)
-    username = Column(String(100), nullable=True)
-    first_name = Column(String(100), nullable=True)
-    last_name = Column(String(100), nullable=True)
-
-    # Default search preferences
-    default_min_rating = Column(Integer, default=800)
-    default_max_rating = Column(Integer, default=3500)
-    preferred_tags = Column(ARRAY(String), default=[])
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    def __repr__(self):
-        return f"<UserSettings telegram_id={self.telegram_id} username={self.username}>"
+    def __str__(self):
+        return f"{self.telegram_id} - {self.username or self.first_name or 'Unknown'}"
 
 
-class SearchHistory(Base):
-    """Model for tracking user search history."""
+class SearchHistory(models.Model):
+    user = models.ForeignKey(UserSettings, on_delete=models.CASCADE, related_name='searches')
+    query = models.CharField(max_length=255, blank=True, null=True)
+    min_rating = models.IntegerField(blank=True, null=True)
+    max_rating = models.IntegerField(blank=True, null=True)
+    tags = models.JSONField(default=list)
+    results_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
 
-    __tablename__ = 'search_history'
+    class Meta:
+        verbose_name = "Search History"
+        verbose_name_plural = "Search Histories"
+        ordering = ['-created_at']
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('user_settings.id', ondelete='CASCADE'), index=True)
-    query = Column(String(255), nullable=True)
-    min_rating = Column(Integer)
-    max_rating = Column(Integer)
-    tags = Column(ARRAY(String), default=[])
-    results_count = Column(Integer, default=0)
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    # Relationship
-    user = relationship('UserSettings')
-
-    def __repr__(self):
-        return f"<SearchHistory user_id={self.user_id} query={self.query}>"
-
-
-def init_db(database_url):
-    """Initialize database connection and create tables."""
-    engine = create_engine(database_url)
-    Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    return Session()
+    def __str__(self):
+        return f"Search by {self.user} at {self.created_at}"

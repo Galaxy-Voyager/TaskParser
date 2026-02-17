@@ -36,7 +36,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: taskparser_web:latest
+    build: .
     container_name: taskparser_web
     command: >
       sh -c "python manage.py migrate &&
@@ -63,7 +63,7 @@ services:
     restart: unless-stopped
 
   celery_worker:
-    image: taskparser_celery_worker:latest
+    build: .
     container_name: taskparser_celery_worker
     command: celery -A config worker --loglevel=info
     volumes:
@@ -84,7 +84,7 @@ services:
     restart: unless-stopped
 
   celery_beat:
-    image: taskparser_celery_beat:latest
+    build: .
     container_name: taskparser_celery_beat
     command: celery -A config beat --loglevel=info
     volumes:
@@ -105,7 +105,7 @@ services:
     restart: unless-stopped
 
   bot:
-    image: taskparser_bot:latest
+    build: .
     container_name: taskparser_bot
     command: python manage.py run_bot
     volumes:
